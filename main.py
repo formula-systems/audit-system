@@ -227,7 +227,7 @@ class EmailAuditEngine:
             
             # Step 4: Update Notion with test ID and seed list
             # Split seed list into 4 chunks of 25 addresses each
-            def split_seed_list(seed_list, chunk_size=25, max_chunks=4):
+            def split_seed_list(seed_list, chunk_size=25, max_chunks=5):
                 """Split seed list into chunks for separate Notion fields"""
                 if not seed_list:
                     return ["Failed to retrieve"] * max_chunks
@@ -252,6 +252,7 @@ class EmailAuditEngine:
                 "GlockApps Seed List 2": {"rich_text": [{"text": {"content": seed_chunks[1]}}]},
                 "GlockApps Seed List 3": {"rich_text": [{"text": {"content": seed_chunks[2]}}]},
                 "GlockApps Seed List 4": {"rich_text": [{"text": {"content": seed_chunks[3]}}]},
+                "GlockApps Seed List 5": {"rich_text": [{"text": {"content": seed_chunks[4]}}]},
                 "Audit Status": {"select": {"name": "Test Created"}}
             }
             
@@ -291,6 +292,7 @@ class EmailAuditEngine:
                 "GlockApps Seed List 2": {"rich_text": [{"text": {"content": ""}}]},
                 "GlockApps Seed List 3": {"rich_text": [{"text": {"content": ""}}]},
                 "GlockApps Seed List 4": {"rich_text": [{"text": {"content": ""}}]},
+                "GlockApps Seed List 5": {"rich_text": [{"text": {"content": ""}}]},
                 "Audit Status": {"select": {"name": "GlockApps Completed"}},
                 "Inbox Placement %": {"number": 0},
                 "Spam Placement %": {"number": 0},
@@ -1219,8 +1221,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    
-    
-    
-    
