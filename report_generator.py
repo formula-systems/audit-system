@@ -149,6 +149,10 @@ class ReportGenerator:
             ip_blacklist_status = props.get("IP Blacklist Status", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "Data not available")
             domain_blacklist_status = props.get("Domain Blacklist Status", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "Data not available")
             
+            # Check if blacklist checks failed (fallback values used)
+            blacklist_failed = ("Fallback" in ip_blacklist_status or "Fallback" in domain_blacklist_status or 
+                              "Error" in ip_blacklist_status or "Error" in domain_blacklist_status)
+            
             blocks: List[Dict[str, Any]] = []
             
             # Executive Summary
@@ -191,7 +195,7 @@ class ReportGenerator:
             blocks.append(self._bullet(f"DMARC Status: {dmarc_status.upper()} - Domain-based Message Authentication, Reporting & Conformance is properly implemented."))
             blocks.append(self._bullet(f"BIMI Status: {bimi_status.upper()} - Brand Indicators for Message Identification {'is set up' if bimi_status.lower() != 'n/a' else 'has not been configured'} for this domain."))
             blocks.append(self._h2("Blacklists"))
-            if is_fallback:
+            if blacklist_failed:
                 blocks.append(self._p("⚠️ NOTE: Blacklist data may be based on fallback values if the blacklist checker failed during this audit."))
             blocks.append(self._bullet(f"IP Blacklist Status: {ip_blacklist_status} - The sending IP address shows no significant blacklist detections."))
             blocks.append(self._bullet(f"Domain Blacklist Status: {domain_blacklist_status} - The domain name is not currently listed on major email blacklists."))
