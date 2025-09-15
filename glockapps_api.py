@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 class GlockAppsAPI:
     """Handles GlockApps API operations"""
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, folder_id: str = None):
         self.api_key = api_key
         self.base_url = "https://api.glockapps.com/gateway/spamtest-v2/api"
         self.headers_variants = [
@@ -58,8 +58,12 @@ class GlockAppsAPI:
         ]
 
         
-        # Folder ID from the API documentation
-        self.folder_id = "6887906d53f7d8a722230f51"
+        # Folder ID from environment variable or parameter
+        if folder_id:
+            self.folder_id = folder_id
+        else:
+            import os
+            self.folder_id = os.getenv("GLOCKAPPS_FOLDER_ID", "6887906d53f7d8a722230f51")
     
     def test_api_connection(self) -> bool:
         """Test GlockApps API connection"""
@@ -340,5 +344,3 @@ class GlockAppsAPI:
         except Exception as e:
             logger.error(f"Error checking test completion stability: {e}")
             raise
-    
-
