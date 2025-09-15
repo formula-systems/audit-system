@@ -26,6 +26,7 @@ load_dotenv()
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 NOTION_AUDITS_DB_ID = os.getenv("NOTION_AUDITS_DB_ID")
 GLOCKAPPS_API_KEY = os.getenv("GLOCKAPPS_API_KEY")
+GLOCKAPPS_FOLDER_ID = os.getenv("GLOCKAPPS_FOLDER_ID")
 
 # Initialize clients
 notion = Client(auth=NOTION_API_KEY)
@@ -34,11 +35,41 @@ class EmailAuditEngine:
     """Main engine that orchestrates the email audit process"""
     
     def __init__(self):
-        self.glockapps = GlockAppsAPI(GLOCKAPPS_API_KEY)
+        self.glockapps = GlockAppsAPI(GLOCKAPPS_API_KEY, GLOCKAPPS_FOLDER_ID)
         self.notion = NotionManager(notion, NOTION_AUDITS_DB_ID)
         self.blacklist_checker = BlacklistChecker()  # Uses default API key from environment or hardcoded
         self.postmark_checker = PostmarkChecker()  # PostmarkApp integration
         self.report_generator = ReportGenerator()  # Report generation
+    
+    def _append_error_log(self, page_id: str, error_message: str) -> None:
+        """Append error message to Error Log field in Notion (only for main step failures)"""
+        try:
+            # Get current Error Log content
+            audit_page = self.notion.client.pages.retrieve(page_id)
+            error_log_property = audit_page.get("properties", {}).get("Error Log", {})
+            rich_text = error_log_property.get("rich_text", [])
+            
+            # Safely get current content
+            current_error_log = ""
+            if rich_text and len(rich_text) > 0:
+                current_error_log = rich_text[0].get("text", {}).get("content", "")
+            
+            # Append new error with timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if current_error_log:
+                new_error_log = f"{current_error_log}\n[{timestamp}] {error_message}"
+            else:
+                new_error_log = f"[{timestamp}] {error_message}"
+            
+            # Update Error Log field
+            self.notion.update_audit_fields(page_id, {
+                "Error Log": {"rich_text": [{"text": {"content": new_error_log}}]}
+            })
+            
+            logger.info(f"✅ Appended error to Error Log: {error_message}")
+            
+        except Exception as e:
+            logger.error(f"Failed to append error to Error Log: {e}")
     
     def process_running_audits(self):
         """Main function to process ONE running audit completely before moving to next"""
@@ -96,10 +127,10 @@ class EmailAuditEngine:
             error_properties = {
                 "IP Blacklist Status": {"rich_text": [{"text": {"content": "Error: Could not resolve IP"}}]},
                 "Domain Blacklist Status": {"rich_text": [{"text": {"content": "Error: Could not resolve IP"}}]},
-                "Audit Status": {"select": {"name": "Error"}},
-                "Error Log": {"rich_text": [{"text": {"content": f"Failed to resolve IP for domain {domain_name}"}}]}
+                "Audit Status": {"select": {"name": "Error"}}
             }
             self.notion.update_audit_fields(page_id, error_properties)
+            self._append_error_log(page_id, "Blacklist Checker Failed")
             return
         
         # Check IP blacklists
@@ -177,6 +208,7 @@ class EmailAuditEngine:
         # Check if blacklist checks failed and handle accordingly
         if ip_blacklist_result.get('status') in ['failed', 'error'] or domain_blacklist_result.get('status') in ['failed', 'error']:
             logger.warning(f"⚠️ Blacklist checks failed for domain {domain_name}, but continuing with fallback values")
+            self._append_error_log(page_id, "Blacklist Checker Failed")
             # Use fallback values instead of stopping the audit
             if ip_blacklist_result.get('status') in ['failed', 'error']:
                 ip_blacklist_result = {
@@ -265,8 +297,7 @@ class EmailAuditEngine:
             
             # Update Notion status to await manual email sending
             email_status_properties = {
-                "Audit Status": {"select": {"name": "Awaiting Email Sending"}},
-                "Error Log": {"rich_text": [{"text": {"content": f"Ready for manual email sending. Seed list: {len(seed_list)} addresses. Test ID: {test_id}"}}]}
+                "Audit Status": {"select": {"name": "Awaiting Email Sending"}}
             }
             self.notion.update_audit_fields(page_id, email_status_properties)
             
@@ -295,10 +326,10 @@ class EmailAuditEngine:
                 "GlockApps Seed List 5": {"rich_text": [{"text": {"content": ""}}]},
                 "Audit Status": {"select": {"name": "GlockApps Completed"}},
                 "Inbox Placement %": {"number": 0},
-                "Spam Placement %": {"number": 0},
-                "Error Log": {"rich_text": [{"text": {"content": f"GlockApps Error: {str(e)} - Using fallback values"}}]}
+                "Spam Placement %": {"number": 0}
             }
             self.notion.update_audit_fields(page_id, fallback_properties)
+            self._append_error_log(page_id, "GlockApps Failed")
             logger.info(f"✅ Using fallback GlockApps values for domain {domain_name}")
             
             # Let the normal workflow continue - don't automatically set to "Emails Sent"
@@ -474,10 +505,10 @@ class EmailAuditEngine:
             fallback_properties = {
                 "Audit Status": {"select": {"name": "GlockApps Completed"}},
                 "Inbox Placement %": {"number": 0},  # Fallback values
-                "Spam Placement %": {"number": 0},
-                "Error Log": {"rich_text": [{"text": {"content": "Using fallback values - GlockApps test creation failed"}}]}
+                "Spam Placement %": {"number": 0}
             }
             self.notion.update_audit_fields(page_id, fallback_properties)
+            self._append_error_log(page_id, "GlockApps Failed")
             logger.info(f"✅ Fallback audit {audit_id} marked as 'GlockApps Completed' with fallback values")
             return
 
@@ -532,10 +563,10 @@ class EmailAuditEngine:
             logger.error(f"Error getting test results for {test_id_field}: {e}")
             # Update error status
             error_properties = {
-                "Audit Status": {"select": {"name": "Report Error"}},
-                "Error Log": {"rich_text": [{"text": {"content": f"Failed to get test report: {str(e)}"}}]}
+                "Audit Status": {"select": {"name": "Report Error"}}
             }
             self.notion.update_audit_fields(page_id, error_properties)
+            self._append_error_log(page_id, "GlockApps Failed")
     
     def update_audit_results(self, page_id: str, results: Dict[str, Any]):
         """Update Notion with GlockApps test results"""
@@ -602,7 +633,6 @@ class EmailAuditEngine:
                 
                 # Raw data
                 "Raw JSON Output": {"rich_text": [{"text": {"content": str(results)[:2000]}}]},  # Limit to 2000 chars for Notion
-                "Error Log": {"rich_text": [{"text": {"content": ""}}]},
                 "Issues Found": {"rich_text": [{"text": {"content": self.generate_issues_summary(results)}}]}
             }
             
@@ -784,6 +814,7 @@ class EmailAuditEngine:
                 logger.info("✅ PostmarkApp deliverability check completed successfully")
             else:
                 logger.warning(f"PostmarkApp check failed: {postmark_results.get('error')}")
+                self._append_error_log(page_id, "PostmarkApp Failed")
                 
                 # PostmarkApp failed - use fallback values and continue to Postmaster immediately
                 logger.warning(f"⚠️ PostmarkApp failed, using fallback values to continue workflow")
@@ -890,9 +921,7 @@ Email Audit System
                         
                         # Update Notion with Postmaster failure information
                         try:
-                            self.notion.update_audit_fields(page_id, {
-                                "Error Log": {"rich_text": [{"text": {"content": f"Postmaster scraper failed for domain {domain_name}. Screenshots unavailable. Check logs for details."}}]}
-                            })
+                            self._append_error_log(page_id, "Postmaster Failed")
                             logger.info("✅ Updated Notion with Postmaster failure information")
                         except Exception as e:
                             logger.error(f"❌ Failed to update Notion with Postmaster failure: {e}")
@@ -1079,8 +1108,9 @@ Email Audit System
 
 def main():
     """Main execution function"""
-    if not all([NOTION_API_KEY, NOTION_AUDITS_DB_ID, GLOCKAPPS_API_KEY]):
+    if not all([NOTION_API_KEY, NOTION_AUDITS_DB_ID, GLOCKAPPS_API_KEY, GLOCKAPPS_FOLDER_ID]):
         logger.error("Missing required environment variables. Please check your .env file.")
+        logger.error("Required variables: NOTION_API_KEY, NOTION_AUDITS_DB_ID, GLOCKAPPS_API_KEY, GLOCKAPPS_FOLDER_ID")
         return
     
     engine = EmailAuditEngine()
