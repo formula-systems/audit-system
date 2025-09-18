@@ -362,6 +362,7 @@ class EmailAuditEngine:
                     
                     # Create fallback GlockApps results structure for PostmarkApp
                     fallback_glockapps_results = {
+                        "test_id": test_id_field,  # Use the fallback test ID
                         "result": {
                             "stats": {
                                 "inboxRate": 0,  # Fallback values
@@ -423,7 +424,9 @@ class EmailAuditEngine:
                     props = audit_page.get("properties", {})
                     
                     # Extract GlockApps results from Notion fields
+                    test_id = props.get("GlockApps Test ID", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "Unknown")
                     glockapps_results = {
+                        "test_id": test_id,
                         "result": {
                             "stats": {
                                 "inboxRate": props.get("Inbox Placement %", {}).get("number", 0),
@@ -781,6 +784,9 @@ class EmailAuditEngine:
             audit_page = self.notion.client.pages.retrieve(page_id)
             props = audit_page.get("properties", {})
             
+            # Extract audit ID
+            audit_id = props.get("Audit ID", {}).get("title", [{}])[0].get("plain_text", "Unknown")
+            
             # Extract domain and from email
             domain_relation = props.get("Domain", {}).get("relation", [])
             if not domain_relation:
@@ -800,7 +806,19 @@ class EmailAuditEngine:
             subject = f"Email Audit Test - {domain_name}"
             
             # Create sample email content based on GlockApps results
-            email_content = self._create_sample_email_content(domain_name, glockapps_results)
+            email_content = self._create_sample_email_content(domain_name, glockapps_results, audit_id)
+            
+            # Log the complete email content for debugging
+            logger.info("=" * 60)
+            logger.info("📧 EMAIL CONTENT FOR POSTMARKAPP SPAM SCORE CHECKING:")
+            logger.info("=" * 60)
+            logger.info(f"From: {from_email}")
+            logger.info(f"To: {to_email}")
+            logger.info(f"Subject: {subject}")
+            logger.info("-" * 40)
+            logger.info("Email Body:")
+            logger.info(email_content)
+            logger.info("=" * 60)
             
             # Run PostmarkApp deliverability check
             logger.info(f"Running PostmarkApp deliverability check for domain: {domain_name}")
@@ -833,32 +851,46 @@ class EmailAuditEngine:
         except Exception as e:
             logger.error(f"Error in PostmarkApp deliverability check: {e}")
     
-    def _create_sample_email_content(self, domain: str, glockapps_results: Dict[str, Any]) -> str:
-        """Create sample email content for PostmarkApp testing"""
-        # Extract stats from GlockApps results
-        stats = glockapps_results.get("result", {}).get("stats", {})
+    def _create_sample_email_content(self, domain: str, glockapps_results: Dict[str, Any], audit_id: str) -> str:
+        """Create complete email with headers for PostmarkApp testing"""
+        from datetime import datetime
+        import uuid
         
-        inbox_rate = stats.get("inboxRate", 0)
-        spam_rate = stats.get("spamRate", 0)
-        not_delivered_rate = stats.get("notDeliveredRate", 0)
+        # Extract test ID from GlockApps results
+        test_id = glockapps_results.get("test_id", "Unknown")
         
-        email_content = f"""
+        # Generate unique message ID
+        message_id = f"<{uuid.uuid4()}@audit.{domain}>"
+        
+        # Get current timestamp
+        current_time = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+        
+        # Create complete email with headers
+        email_content = f"""From: audit@{domain}
+To: test@example.com
 Subject: Email Audit Test - {domain}
+Date: {current_time}
+Message-ID: {message_id}
+Content-Type: text/plain; charset=UTF-8
+MIME-Version: 1.0
+X-Mailer: Email Audit System
+X-Audit-ID: {audit_id}
+X-GlockApps-Test-ID: {test_id}
 
-Dear Test Recipient,
+Hello,
 
-This is an automated email audit test for the domain {domain}.
+This is an automated email audit test for domain: {domain}
 
-GlockApps Test Results:
-- Inbox Placement Rate: {inbox_rate}%
-- Spam Placement Rate: {spam_rate}%
-- Not Delivered Rate: {not_delivered_rate}%
+Audit ID: {audit_id}
+GlockApps Test ID: {test_id}
+From Email: audit@{domain}
 
-This email is being tested for deliverability using PostmarkApp's SpamCheck API.
+This email is being sent as part of an email deliverability audit to test inbox placement, spam filtering, and overall email reputation.
+
+Please do not reply to this email.
 
 Best regards,
-Email Audit System
-        """.strip()
+Email Audit System"""
         
         return email_content
     
