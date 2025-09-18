@@ -48,10 +48,10 @@ class PostmarkChecker:
         Check email deliverability using PostmarkApp SpamCheck API
         
         Args:
-            email_content: The email body content
-            from_email: Sender email address
-            to_email: Recipient email address
-            subject: Email subject line
+            email_content: The complete email with headers and body
+            from_email: Sender email address (for logging)
+            to_email: Recipient email address (for logging)
+            subject: Email subject line (for logging)
             
         Returns:
             Dictionary containing deliverability results
@@ -60,6 +60,7 @@ class PostmarkChecker:
         
         try:
             # Prepare the email data for PostmarkApp
+            # email_content now contains the complete email with headers
             email_data = {
                 "email": email_content,
                 "options": "long"
