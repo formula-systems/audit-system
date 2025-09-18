@@ -62,7 +62,6 @@ class ReportGenerator:
             spf_status = auth_result.get("spfAuth", "unknown")
             dkim_status = auth_result.get("dkimAuth", "unknown")
             dmarc_status = auth_result.get("dmarcAuth", "unknown")
-            bimi_status = auth_result.get("bimi", "")
             
             # Extract blacklist data
             ip_blacklist_status = blacklist_data.get("ip_status", "Clean")
@@ -99,7 +98,6 @@ class ReportGenerator:
             blocks.append(self._bullet(f"SPF Status: {spf_status.upper()} - The Sender Policy Framework record is properly configured and authenticating successfully."))
             blocks.append(self._bullet(f"DKIM Status: {dkim_status.upper()} - DomainKeys Identified Mail authentication is working correctly."))
             blocks.append(self._bullet(f"DMARC Status: {dmarc_status.upper()} - Domain-based Message Authentication, Reporting & Conformance is properly implemented."))
-            blocks.append(self._bullet(f"BIMI Status: {'Configured' if bimi_status else 'Not Configured'} - Brand Indicators for Message Identification {'is set up' if bimi_status else 'has not been configured'} for this domain."))
             blocks.append(self._h2("Blacklists"))
             blocks.append(self._bullet(f"IP Blacklist Status: {ip_blacklist_status} - The sending IP address shows no significant blacklist detections."))
             blocks.append(self._bullet(f"Domain Blacklist Status: {domain_blacklist_status} - The domain name is not currently listed on major email blacklists."))
@@ -143,7 +141,6 @@ class ReportGenerator:
             spf_status = props.get("SPF Status", {}).get("select", {}).get("name", "Unknown")
             dkim_status = props.get("DKIM Status", {}).get("select", {}).get("name", "Unknown")
             dmarc_status = props.get("DMARC Status", {}).get("select", {}).get("name", "Unknown")
-            bimi_status = props.get("BIMI Status", {}).get("select", {}).get("name", "Unknown")
             
             # Extract blacklist statuses
             ip_blacklist_status = props.get("IP Blacklist Status", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "Data not available")
@@ -193,7 +190,6 @@ class ReportGenerator:
             blocks.append(self._bullet(f"SPF Status: {spf_status.upper()} - The Sender Policy Framework record is properly configured and authenticating successfully."))
             blocks.append(self._bullet(f"DKIM Status: {dkim_status.upper()} - DomainKeys Identified Mail authentication is working correctly."))
             blocks.append(self._bullet(f"DMARC Status: {dmarc_status.upper()} - Domain-based Message Authentication, Reporting & Conformance is properly implemented."))
-            blocks.append(self._bullet(f"BIMI Status: {bimi_status.upper()} - Brand Indicators for Message Identification {'is set up' if bimi_status.lower() != 'n/a' else 'has not been configured'} for this domain."))
             blocks.append(self._h2("Blacklists"))
             if blacklist_failed:
                 blocks.append(self._p("⚠️ NOTE: Blacklist data may be based on fallback values if the blacklist checker failed during this audit."))
